@@ -1,0 +1,450 @@
+================================================================================
+CODE REVIEW: WalletPage Component - Issues and Refactoring
+================================================================================
+
+This document details the computational inefficiencies, anti-patterns, and bugs
+found in the original WalletPage React component, along with explanations of
+how each issue was resolved.
+
+================================================================================
+CRITICAL ERRORS (Will cause runtime failures)
+================================================================================
+
+1. UNDEFINED VARIABLE REFERENCE (Line 39)
+   ----------------------------------------------------------------------
+   ISSUE:
+   - Variable `lhsPriority` is used but never defined
+   - Should reference `balancePriority` which was computed on line 38
+   
+   ORIGINAL CODE:
+   ```
+   const balancePriority = getPriority(balance.blockchain);
+   if (lhsPriority > -99) {  // ❌ lhsPriority doesn't exist
+   ```
+   
+   FIXED CODE:
+   ```
+   const balancePriority = getPriority(balance.blockchain);
+   if (balancePriority > -99) {  // ✅ Uses correct variable
+   ```
+   
+   IMPACT: ReferenceError at runtime - application will crash
+
+
+2. MISSING PROPERTY IN INTERFACE (Line 1-4)
+   ----------------------------------------------------------------------
+   ISSUE:
+   - WalletBalance interface missing `blockchain` property
+   - Code uses `balance.blockchain` on line 38 but it's not defined
+   
+   ORIGINAL CODE:
+   ```
+   interface WalletBalance {
+     currency: string;
+     amount: number;
+     // ❌ blockchain property missing
+   }
+   ```
+   
+   FIXED CODE:
+   ```
+   interface WalletBalance {
+     currency: string;
+     amount: number;
+     blockchain: string;  // ✅ Added missing property
+   }
+   ```
+   
+   IMPACT: TypeScript compilation error, runtime property access issues
+
+
+3. TYPE MISMATCH IN MAP OPERATION (Line 63)
+   ----------------------------------------------------------------------
+   ISSUE:
+   - Mapping over `sortedBalances` (type: WalletBalance[])
+   - But typing the parameter as `FormattedWalletBalance`
+   - Accessing `balance.formatted` which doesn't exist on WalletBalance
+   
+   ORIGINAL CODE:
+   ```
+   const rows = sortedBalances.map((balance: FormattedWalletBalance, index: number) => {
+     // ❌ sortedBalances is WalletBalance[], not FormattedWalletBalance[]
+     formattedAmount={balance.formatted}  // ❌ Property doesn't exist
+   ```
+   
+   FIXED CODE:
+   ```
+   const rows = useMemo(() => {
+     return sortedBalances.map((balance: WalletBalance) => {
+       const formattedAmount = balance.amount.toFixed();  // ✅ Computed inline
+   ```
+   
+   IMPACT: TypeScript error, runtime undefined property access
+
+
+4. MISSING RETURN VALUE IN SORT COMPARATOR (Line 45-53)
+   ----------------------------------------------------------------------
+   ISSUE:
+   - Sort function doesn't return a value when priorities are equal
+   - Missing `return 0` case
+   
+   ORIGINAL CODE:
+   ```
+   if (leftPriority > rightPriority) {
+     return -1;
+   } else if (rightPriority > leftPriority) {
+     return 1;
+   }
+   // ❌ No return statement for equal priorities
+   ```
+   
+   FIXED CODE:
+   ```
+   return rightPriority - leftPriority;  // ✅ Handles all cases
+   ```
+   
+   IMPACT: Undefined behavior when comparing items with equal priority
+
+================================================================================
+LOGIC ERRORS (Incorrect business logic)
+================================================================================
+
+5. INVERTED FILTER LOGIC (Lines 37-44)
+   ----------------------------------------------------------------------
+   ISSUE:
+   - Filter keeps balances with amount <= 0 (zero or negative)
+   - This is counterintuitive - we want to show positive balances
+   - Logic returns true for wrong condition
+   
+   ORIGINAL CODE:
+   ```
+   if (balancePriority > -99) {
+     if (balance.amount <= 0) {
+       return true;  // ❌ Keeps zero/negative amounts
+     }
+   }
+   return false;  // ❌ Filters out valid balances
+   ```
+   
+   FIXED CODE:
+   ```
+   return balancePriority > -99 && balance.amount > 0;  // ✅ Keeps valid balances
+   ```
+   
+   IMPACT: Shows wrong data - displays empty balances, hides valid ones
+
+
+6. COMPUTED BUT UNUSED VARIABLE (Lines 56-61)
+   ----------------------------------------------------------------------
+   ISSUE:
+   - `formattedBalances` is computed but never used
+   - `rows` uses `sortedBalances` instead of `formattedBalances`
+   - Wasted computation on every render
+   
+   ORIGINAL CODE:
+   ```
+   const formattedBalances = sortedBalances.map((balance: WalletBalance) => {
+     return {
+       ...balance,
+       formatted: balance.amount.toFixed()
+     }
+   })  // ❌ Created but never used
+   
+   const rows = sortedBalances.map(...)  // ❌ Uses sortedBalances instead
+   ```
+   
+   FIXED CODE:
+   ```
+   // ✅ Removed formattedBalances, formatting done inline in rows
+   const rows = useMemo(() => {
+     return sortedBalances.map((balance: WalletBalance) => {
+       const formattedAmount = balance.amount.toFixed();
+   ```
+   
+   IMPACT: Unnecessary O(n) operation on every render
+
+================================================================================
+PERFORMANCE ISSUES (Computational inefficiencies)
+================================================================================
+
+7. INCORRECT USEMEMO DEPENDENCIES (Line 54)
+   ----------------------------------------------------------------------
+   ISSUE:
+   - `prices` included in dependency array but never used in useMemo
+   - Causes unnecessary recalculation when prices change
+   - sortedBalances only depends on balances, not prices
+   
+   ORIGINAL CODE:
+   ```
+   const sortedBalances = useMemo(() => {
+     return balances.filter(...).sort(...);
+   }, [balances, prices]);  // ❌ prices not used inside
+   ```
+   
+   FIXED CODE:
+   ```
+   const sortedBalances = useMemo(() => {
+     return balances.filter(...).sort(...);
+   }, [balances]);  // ✅ Only necessary dependency
+   ```
+   
+   IMPACT: Unnecessary recalculations = wasted CPU cycles
+
+
+8. MISSING USEMEMO FOR ROWS (Lines 63-74)
+   ----------------------------------------------------------------------
+   ISSUE:
+   - `rows` recalculated on every render without memoization
+   - Creates new WalletRow components unnecessarily
+   - Causes child components to re-render even when data unchanged
+   
+   ORIGINAL CODE:
+   ```
+   const rows = sortedBalances.map((balance: FormattedWalletBalance, index: number) => {
+     // ❌ Runs on every render
+   ```
+   
+   FIXED CODE:
+   ```
+   const rows = useMemo(() => {
+     return sortedBalances.map((balance: WalletBalance) => {
+       // ✅ Only recalculates when dependencies change
+     });
+   }, [sortedBalances, prices]);
+   ```
+   
+   IMPACT: Unnecessary re-renders, poor performance with large lists
+
+
+9. DUPLICATE MAP OPERATIONS (Lines 56-61 and 63-74)
+   ----------------------------------------------------------------------
+   ISSUE:
+   - Maps over sortedBalances twice
+   - First map creates formattedBalances (unused)
+   - Second map creates rows
+   - Should be combined into single operation
+   
+   ORIGINAL CODE:
+   ```
+   const formattedBalances = sortedBalances.map(...)  // ❌ First map
+   const rows = sortedBalances.map(...)                // ❌ Second map
+   ```
+   
+   FIXED CODE:
+   ```
+   const rows = useMemo(() => {
+     return sortedBalances.map((balance: WalletBalance) => {
+       const formattedAmount = balance.amount.toFixed();  // ✅ Single map
+       const usdValue = prices[balance.currency] * balance.amount;
+       return <WalletRow ... />;
+     });
+   }, [sortedBalances, prices]);
+   ```
+   
+   IMPACT: O(2n) reduced to O(n), 50% fewer iterations
+
+
+10. FUNCTION RECREATION ON EVERY RENDER (Lines 19-34)
+    ----------------------------------------------------------------------
+    ISSUE:
+    - `getPriority` function defined inside component
+    - Recreated on every render
+    - Though minor, adds to memory pressure
+    
+    ORIGINAL CODE:
+    ```
+    const WalletPage: React.FC<Props> = (props: Props) => {
+      const getPriority = (blockchain: any): number => {
+        // ❌ Recreated every render
+    ```
+    
+    FIXED CODE:
+    ```
+    // ✅ Defined outside component (created once)
+    const getPriority = (blockchain: string): number => {
+      switch (blockchain) {
+    
+    const WalletPage: React.FC<Props> = (props) => {
+    ```
+    
+    IMPACT: Minor - reduces memory allocations
+
+================================================================================
+REACT ANTI-PATTERNS
+================================================================================
+
+11. ARRAY INDEX AS KEY (Line 68)
+    ----------------------------------------------------------------------
+    ISSUE:
+    - Using array index as React key prop
+    - Breaks React's reconciliation when list order changes
+    - Can cause state bugs and unnecessary re-renders
+    
+    ORIGINAL CODE:
+    ```
+    const rows = sortedBalances.map((balance: FormattedWalletBalance, index: number) => {
+      return (
+        <WalletRow
+          key={index}  // ❌ Index as key
+    ```
+    
+    FIXED CODE:
+    ```
+    return (
+      <WalletRow
+        key={balance.currency}  // ✅ Stable unique identifier
+    ```
+    
+    IMPACT: Potential rendering bugs, incorrect component state preservation
+    
+    WHY IT'S BAD:
+    - If list is sorted/filtered, indices change but components stay same
+    - React may reuse wrong component instance
+    - Can cause visual bugs and state issues
+
+
+12. REDUNDANT TYPE ANNOTATION (Line 14)
+    ----------------------------------------------------------------------
+    ISSUE:
+    - Using both `React.FC<Props>` and `(props: Props)`
+    - Redundant type information
+    
+    ORIGINAL CODE:
+    ```
+    const WalletPage: React.FC<Props> = (props: Props) => {
+      // ❌ Props typed twice
+    ```
+    
+    FIXED CODE:
+    ```
+    const WalletPage: React.FC<Props> = (props) => {
+      // ✅ Props type inferred from React.FC<Props>
+    ```
+    
+    IMPACT: Code verbosity, no functional impact
+
+
+13. UNUSED DESTRUCTURED VARIABLE (Line 15)
+    ----------------------------------------------------------------------
+    ISSUE:
+    - `children` destructured but never used
+    
+    ORIGINAL CODE:
+    ```
+    const { children, ...rest } = props;
+    // ❌ children never referenced
+    ```
+    
+    FIXED CODE:
+    ```
+    const { children, ...rest } = props;
+    // Note: Kept for API consistency, but could be removed if truly unused
+    ```
+    
+    IMPACT: Minor - unused variable
+
+================================================================================
+TYPE SAFETY ISSUES
+================================================================================
+
+14. ANY TYPE USAGE (Line 19)
+    ----------------------------------------------------------------------
+    ISSUE:
+    - Parameter `blockchain` typed as `any`
+    - Defeats purpose of TypeScript
+    - No compile-time type checking
+    
+    ORIGINAL CODE:
+    ```
+    const getPriority = (blockchain: any): number => {
+      // ❌ any type removes type safety
+    ```
+    
+    FIXED CODE:
+    ```
+    const getPriority = (blockchain: string): number => {
+      // ✅ Proper type annotation
+    ```
+    
+    IMPACT: Loss of type safety, potential runtime errors
+
+
+15. UNNECESSARY INTERFACE (Lines 5-9)
+    ----------------------------------------------------------------------
+    ISSUE:
+    - FormattedWalletBalance interface defined but not actually needed
+    - Since formattedBalances was removed, this interface is unused
+    - Formatting is done inline in the render map, no separate type needed
+    
+    ORIGINAL CODE:
+    ```
+    interface FormattedWalletBalance {
+      currency: string;
+      amount: number;
+      formatted: string;
+    }
+    ```
+    
+    FIXED CODE:
+    ```
+    // ✅ Interface completely removed - not needed anymore
+    // Formatting is done inline: balance.amount.toFixed()
+    ```
+    
+    IMPACT: Cleaner code, removed unused type definition
+
+
+16. UNNECESSARY INTERFACE WRAPPER (Lines 11-13)
+    ----------------------------------------------------------------------
+    ISSUE:
+    - Props interface extends BoxProps but adds nothing
+    - Creates unnecessary abstraction layer
+    - Should use BoxProps directly
+    
+    ORIGINAL CODE:
+    ```
+    interface Props extends BoxProps {
+    
+    }
+    const WalletPage: React.FC<Props> = (props: Props) => {
+    ```
+    
+    FIXED CODE:
+    ```
+    // ✅ Interface removed completely, use BoxProps directly
+    const WalletPage: React.FC<BoxProps> = (props) => {
+    ```
+    
+    IMPACT: Cleaner code, removed unnecessary type wrapper
+
+
+17. MISSING EXPLICIT TYPE ANNOTATIONS FOR HOOKS (Lines 16-17)
+    ----------------------------------------------------------------------
+    ISSUE:
+    - Hook return values rely on type inference
+    - Without explicit types, it's unclear what data structure is expected
+    - Makes code harder to understand and maintain
+    - Type inference might fail if hook definitions are in external libraries
+    
+    ORIGINAL CODE:
+    ```
+    const balances = useWalletBalances();
+    const prices = usePrices();
+    // ❌ No explicit types, relying on inference
+    ```
+    
+    FIXED CODE:
+    ```
+    const balances: WalletBalance[] = useWalletBalances();
+    const prices: Record<string, number> = usePrices();
+    // ✅ Explicit types for clarity and type safety
+    ```
+    
+    IMPACT: Better code readability, explicit type contracts, catches type errors
+    
+    WHY IT'S IMPORTANT:
+    - Makes the expected data structure immediately clear to readers
+    - Provides better IDE autocomplete and IntelliSense
+    - Catches type mismatches early if hook implementation changes
+    - Self-documenting code - no need to look up hook definitions
+    - Prevents accidental type widening or narrowing
