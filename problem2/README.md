@@ -6,7 +6,7 @@ A modern, intuitive currency swap interface built with React, TypeScript, Vite, 
 
 ### Core Functionality
 - **Real-time Token Prices**: Fetches live token prices from Switcheo API
-- **Token Selection**: Searchable dropdown with token icons and prices
+- **Token Selection Dialog**: Modal-based token selector with search functionality
 - **Amount Input**: Clean, intuitive input with percentage quick-select buttons (15%, 25%, 50%, 75%, 100%)
 - **Exchange Rate Display**: Live calculation showing conversion rates
 - **Swap Direction Toggle**: Quick button to reverse swap direction
@@ -21,14 +21,19 @@ A modern, intuitive currency swap interface built with React, TypeScript, Vite, 
 - **Error Handling**: Clear, user-friendly error messages
 - **Success Feedback**: Animated success notifications
 - **Loading States**: Smooth loading indicators for async operations
-- **Responsive Design**: Works beautifully on mobile, tablet, and desktop
+- **Fully Responsive Design**: 
+  - Mobile-first approach with Tailwind breakpoints
+  - Touch-friendly tap targets (minimum 44x44px)
+  - Adaptive text sizes and spacing
+  - Works beautifully on mobile, tablet, and desktop
 
 ### Visual Design
 - **Modern Dark Theme**: Sleek dark mode interface with gradient backgrounds
 - **Green Accent Color**: Eye-catching green primary color for actions
-- **Smooth Animations**: Fade-in effects and transition animations
-- **Custom Scrollbar**: Styled scrollbars for dropdowns
-- **Token Icons**: Dynamic loading from Switcheo token repository with fallback placeholders
+- **Smooth Animations**: Fade-in effects, scale animations, and transitions
+- **Custom Scrollbar**: Styled scrollbars for dialog lists
+- **Token Icons**: Dynamic loading from Switcheo token repository with fallback gradient placeholders
+- **Modal Dialog**: Centered dialog with backdrop blur and ESC key support
 - **Glass-morphism Effects**: Semi-transparent backgrounds with blur effects
 
 ## Technology Stack
@@ -45,46 +50,108 @@ A modern, intuitive currency swap interface built with React, TypeScript, Vite, 
 problem2/
 ├── src/
 │   ├── components/
-│   │   ├── SwapForm.tsx          # Main swap interface component
-│   │   └── TokenSelector.tsx     # Token dropdown selector with search
+│   │   ├── SwapForm.tsx             # Main swap interface (presentation)
+│   │   ├── TokenSelectorDialog.tsx  # Modal token selector (presentation)
+│   │   └── TokenIcon.tsx            # Token icon with fallback
+│   ├── hooks/
+│   │   ├── index.ts                 # Barrel exports for hooks
+│   │   ├── useSwapForm.ts           # Swap form logic and state
+│   │   └── useTokenSelector.ts      # Token selector logic and state
 │   ├── services/
-│   │   └── tokenService.ts       # API calls and token utilities
-│   ├── types.ts                  # TypeScript type definitions
-│   ├── App.tsx                   # Root application component
-│   ├── main.tsx                  # Application entry point
-│   └── index.css                 # Global styles and animations
+│   │   └── tokenService.ts          # API calls and token utilities
+│   ├── types.ts                     # TypeScript type definitions
+│   ├── App.tsx                      # Root application component
+│   ├── main.tsx                     # Application entry point
+│   └── index.css                    # Global styles and animations
 ├── package.json
 ├── vite.config.ts
 ├── tsconfig.json
-└── PROJECT_README.md
+└── README.md
 ```
 
-## Component Architecture
+## Architecture
 
-### App.tsx
+### Component Layer (Presentation)
+
+#### App.tsx
 - Root component managing application state
-- Handles token data fetching
-- Provides loading and error states
+- Handles token data fetching with error handling
+- Provides loading, error, and success states
+- Responsive layout with mobile-first design
 - Passes token data to SwapForm
 
-### SwapForm.tsx
-- Main swap interface
-- Manages swap state (from/to tokens, amounts)
-- Implements input validation logic
-- Handles swap transaction simulation
-- Displays exchange rates and balances
+#### SwapForm.tsx (Presentation Component)
+- Pure presentation component (~150 lines)
+- Renders swap interface UI
+- Delegates all logic to `useSwapForm` hook
+- Responsive design with adaptive text sizes
+- Displays exchange rates, balances, and messages
 
-### TokenSelector.tsx
-- Reusable token dropdown component
-- Search functionality
-- Displays token icons and prices
-- Click-outside detection for UX
+#### TokenSelectorDialog.tsx (Presentation Component)
+- Pure presentation component (~95 lines)
+- Modal dialog for token selection
+- Delegates all logic to `useTokenSelector` hook
+- Responsive dialog with mobile optimization
+- Search input and scrollable token list
 
-### tokenService.ts
-- Fetches token prices from API
-- Provides token icon URLs
+#### TokenIcon.tsx
+- Displays token icons with image fallback
+- Responsive sizes (mobile/desktop)
+- Gradient background placeholder with currency initial
+
+### Logic Layer (Custom Hooks)
+
+#### useSwapForm Hook
+**Manages all swap form business logic:**
+- State management (tokens, amounts, balance, loading, errors)
+- Token initialization (defaults to WBTC → ETH)
+- Exchange rate calculation with auto-updates
+- Input validation and formatting
+- Percentage selection logic
+- Token swapping functionality
+- Form submission with async handling
+- Success/error message management
+
+**Returns:**
+```typescript
+{
+  // State
+  fromToken, toToken, fromAmount, toAmount, balance,
+  isLoading, error, successMessage, exchangeRate,
+  fromTokenData, toTokenData,
+  // Actions
+  setFromToken, setToToken, handleFromAmountChange,
+  handlePercentageClick, handleSwapTokens, handleSubmit
+}
+```
+
+#### useTokenSelector Hook
+**Manages token selector dialog logic:**
+- Dialog open/close state management
+- Search functionality with real-time filtering
+- Body scroll lock when dialog is open
+- Keyboard support (ESC to close)
+- Token selection handling
+- Search term management
+
+**Returns:**
+```typescript
+{
+  // State
+  isOpen, searchTerm, selectedTokenData, filteredTokens,
+  // Actions
+  setSearchTerm, handleSelectToken, handleClose, handleOpen
+}
+```
+
+### Service Layer
+
+#### tokenService.ts
+- Fetches token prices from Switcheo API
+- Provides token icon URLs from GitHub
 - Filters and processes token data
-- Calculates exchange rates
+- Removes duplicates, keeps latest prices
+- Calculates exchange rates between tokens
 
 ## Key Features Implementation
 
@@ -128,15 +195,34 @@ await new Promise(resolve => setTimeout(resolve, 1500));
 - **Format**: SVG images
 - **Fallback**: Placeholder images for missing tokens
 
+## Design Patterns
+
+### Separation of Concerns
+- **Components**: Pure presentation, no business logic
+- **Hooks**: All business logic, state management, side effects
+- **Services**: API calls, data transformation, utilities
+
+### Benefits of This Architecture
+1. **Testability**: Hooks can be unit tested independently
+2. **Reusability**: Hooks can be used across multiple components
+3. **Maintainability**: Logic changes don't require UI changes
+4. **Readability**: Components are clean and easy to understand
+5. **Code Organization**: Clear separation between logic and presentation
+
 ## Styling Approach
 
 ### Tailwind CSS Classes
 Using Tailwind's utility classes for:
-- Layout and spacing
-- Colors and backgrounds
-- Hover states and transitions
-- Responsive design
-- Custom animations
+- **Responsive Design**: `sm:`, `md:` breakpoints for mobile-first design
+- Layout and spacing with adaptive values
+- Colors and backgrounds with opacity variants
+- Hover and active states for interactions
+- Custom animations and transitions
+
+### Responsive Breakpoints
+- **Mobile**: Default (< 640px)
+- **Tablet**: `sm:` (≥ 640px)
+- **Desktop**: `md:` (≥ 768px)
 
 ### Custom CSS
 Additional styles in `index.css`:
@@ -154,72 +240,9 @@ npm run dev
 yarn dev
 ```
 
-### Build for Production
-```bash
-npm run build
-# or
-yarn build
-```
-
-### Preview Production Build
-```bash
-npm run preview
-# or
-yarn preview
-```
-
-### Linting
-```bash
-npm run lint
-# or
-yarn lint
-```
-
-## Future Enhancements
-
-Potential improvements for production:
-- Real backend integration with blockchain
-- Transaction history
-- Slippage tolerance settings
-- Multi-wallet support
-- Price charts and analytics
-- Favorites/pinned tokens
-- Recent swaps history
-- Dark/light theme toggle
-- Multiple language support
-- Gas fee estimation
-- Advanced trading features (limit orders, etc.)
-
-## Browser Support
-
-- Chrome/Edge (latest)
-- Firefox (latest)
-- Safari (latest)
-- Mobile browsers (iOS Safari, Chrome Mobile)
-
-## Performance Optimizations
-
-- Lazy loading of token icons
-- Debounced search in token selector
-- Memoization of exchange rate calculations
-- Efficient re-renders with React hooks
-- Optimized bundle size with Vite
-
-## Accessibility
-
-- Semantic HTML elements
-- Keyboard navigation support
-- Focus states on interactive elements
-- ARIA labels where appropriate
-- Color contrast compliance
-
 ## Credits
 
 - Token icons from [Switcheo Token Icons](https://github.com/Switcheo/token-icons)
 - Price data from [Switcheo Interview API](https://interview.switcheo.com/prices.json)
-- Built with ❤️ using Vite and React
-
-## License
-
-This project is created for demonstration purposes.
+- Built with ❤️ using React 19, TypeScript, Vite, and Tailwind CSS 4
 
