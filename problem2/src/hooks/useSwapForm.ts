@@ -70,8 +70,8 @@ export function useSwapForm() {
   const handlePercentageClick = (percentage: number) => {
     const fromTokenData = tokens.find(t => t.currency === fromToken);
     const fromTokenBalance = fromTokenData?.balance || 0;
-    const amount = (fromTokenBalance * percentage / 100).toFixed(2);
-    setFromAmount(amount);
+    const amount = (fromTokenBalance * percentage / 100);
+    setFromAmount(amount.toString());
     setError(null);
   };
 
