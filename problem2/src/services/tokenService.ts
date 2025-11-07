@@ -33,9 +33,14 @@ export const getUniqueTokens = (tokens: Token[]): Token[] => {
     }
   });
   
-  return Array.from(tokenMap.values()).sort((a, b) => 
-    a.currency.localeCompare(b.currency)
-  );
+  return Array.from(tokenMap.values())
+    .map(token => ({
+      ...token,
+      balance: Math.random() * 1000 // Random balance between 0 and 1000
+    }))
+    .sort((a, b) => 
+      a.currency.localeCompare(b.currency)
+    );
 };
 
 export const calculateExchangeRate = (

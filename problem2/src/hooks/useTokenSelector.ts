@@ -5,17 +5,20 @@ interface UseTokenSelectorProps {
   tokens: Token[];
   selectedToken: string;
   onSelectToken: (currency: string) => void;
+  filterByBalance?: boolean;
 }
 
-export function useTokenSelector({ tokens, selectedToken, onSelectToken }: UseTokenSelectorProps) {
+export function useTokenSelector({ tokens, selectedToken, onSelectToken, filterByBalance = false }: UseTokenSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
   const selectedTokenData = tokens.find(t => t.currency === selectedToken);
 
-  const filteredTokens = tokens.filter(token =>
-    token.currency.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredTokens = tokens.filter(token => {
+    const matchesSearch = token.currency.toLowerCase().includes(searchTerm.toLowerCase());
+    const hasBalance = filterByBalance ? token.balance > 0 : true;
+    return matchesSearch && hasBalance;
+  });
 
   // Handle body scroll lock
   useEffect(() => {

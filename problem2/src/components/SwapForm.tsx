@@ -1,19 +1,17 @@
-import type { Token } from '../types';
 import TokenSelector from './TokenSelectorDialog';
 import { useSwapForm } from '../hooks/useSwapForm';
 
-interface SwapFormProps {
-  tokens: Token[];
-  onSwap: (fromToken: string, toToken: string, fromAmount: number) => Promise<void>;
-}
-
-export default function SwapForm({ tokens, onSwap }: SwapFormProps) {
+export default function SwapForm() {
   const {
+    tokens,
+    isLoadingTokens,
+    fetchError,
     fromToken,
     toToken,
     fromAmount,
     toAmount,
-    balance,
+    fromTokenBalance,
+    toTokenBalance,
     isLoading,
     error,
     successMessage,
@@ -24,17 +22,52 @@ export default function SwapForm({ tokens, onSwap }: SwapFormProps) {
     handlePercentageClick,
     handleSwapTokens,
     handleSubmit,
-  } = useSwapForm({ tokens, onSwap });
+  } = useSwapForm();
+
+  // Show loading state
+  if (isLoadingTokens) {
+    return (
+      <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl sm:rounded-2xl shadow-2xl border border-gray-700/50 p-4 sm:p-5 md:p-6">
+        <div className="flex flex-col items-center justify-center py-12 sm:py-16 md:py-20 gap-4">
+          <div className="relative">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 border-4 border-gray-700 border-t-green-500 rounded-full animate-spin"></div>
+          </div>
+          <p className="text-gray-400 mt-2 sm:mt-4 text-sm sm:text-base">Loading tokens...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (fetchError) {
+    return (
+      <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl sm:rounded-2xl shadow-2xl border border-gray-700/50 p-4 sm:p-5 md:p-6">
+        <div className="bg-red-500/10 border border-red-500/50 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-center gap-3 sm:gap-4 flex flex-col">
+          <p className="text-red-400 text-base sm:text-lg">{fetchError}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 sm:px-6 py-2 sm:py-2.5 bg-red-500 hover:bg-red-400 text-white rounded-lg transition-colors text-sm sm:text-base h-10 sm:h-11"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
       <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl sm:rounded-2xl shadow-2xl border border-gray-700/50 gap-2 flex flex-col p-4 sm:p-5 md:p-6">
-        {/* Header */}
-        <div className="text-gray-400 text-base sm:text-lg">
-          Balance: <span className="text-white font-semibold">{balance.toLocaleString()}</span>
-        </div>
-
         <form onSubmit={handleSubmit} className="gap-4 sm:gap-5 flex flex-col">
           {/* From Section */}
+          <div className="flex justify-between items-center text-base sm:text-lg">
+            <div className="text-gray-400">
+              {fromToken && (
+                <span>
+                  Balance: <span className="text-white font-semibold">{fromTokenBalance} {fromToken}</span>
+                </span>
+              )}
+            </div>
+          </div>
           <div className="bg-gray-800/50 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-gray-700/50">
             <div className="flex justify-between items-center mb-2">
               <span className="text-gray-400 text-xs sm:text-sm font-medium">You pay</span>
@@ -53,6 +86,7 @@ export default function SwapForm({ tokens, onSwap }: SwapFormProps) {
                   tokens={tokens}
                   selectedToken={fromToken}
                   onSelectToken={setFromToken}
+                  filterByBalance={true}
                 />
               )}
             </div>
@@ -85,13 +119,24 @@ export default function SwapForm({ tokens, onSwap }: SwapFormProps) {
             </button>
           </div>
 
+
+          <div className="flex justify-between items-center text-base sm:text-lg">
+            <div className="text-gray-400">
+              {toToken && (
+                <span>
+                  Balance: <span className="text-white font-semibold">{toTokenBalance} {toToken}</span>
+                </span>
+              )}
+            </div>
+          </div>
+
           {/* To Section */}
           <div className="bg-gray-800/50 rounded-lg sm:rounded-xl p-3 sm:p-4 border border-gray-700/50 mb-2 sm:mb-3">
             <div className="flex justify-between items-center mb-2 flex-wrap gap-1">
               <span className="text-gray-400 text-xs sm:text-sm font-medium">You receive</span>
               {toAmount && parseFloat(toAmount) > 0 && (
                 <span className="text-gray-400 text-[10px] sm:text-xs">
-                  Min. received: <span className="text-white font-semibold">{(parseFloat(toAmount) * 0.995).toFixed(6)}</span>
+                  Min. received: <span className="text-white font-semibold">{(parseFloat(toAmount) * 0.995)}</span>
                 </span>
               )}
             </div>

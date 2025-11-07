@@ -7,13 +7,15 @@ interface TokenSelectorProps {
   selectedToken: string;
   onSelectToken: (currency: string) => void;
   disabled?: boolean;
+  filterByBalance?: boolean;
 }
 
 export default function TokenSelector({
   tokens,
   selectedToken,
   onSelectToken,
-  disabled = false
+  disabled = false,
+  filterByBalance = false
 }: TokenSelectorProps) {
   const {
     isOpen,
@@ -24,7 +26,7 @@ export default function TokenSelector({
     handleSelectToken,
     handleClose,
     handleOpen,
-  } = useTokenSelector({ tokens, selectedToken, onSelectToken });
+  } = useTokenSelector({ tokens, selectedToken, onSelectToken, filterByBalance });
 
   return (
     <>

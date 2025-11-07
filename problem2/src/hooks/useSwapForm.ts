@@ -1,21 +1,38 @@
 import { useState, useEffect } from 'react';
 import type { Token } from '../types';
-import { calculateExchangeRate } from '../services/tokenService';
+import { calculateExchangeRate, fetchTokenPrices, getUniqueTokens } from '../services/tokenService';
 
-interface UseSwapFormProps {
-  tokens: Token[];
-  onSwap: (fromToken: string, toToken: string, fromAmount: number) => Promise<void>;
-}
-
-export function useSwapForm({ tokens, onSwap }: UseSwapFormProps) {
+export function useSwapForm() {
+  const [tokens, setTokens] = useState<Token[]>([]);
+  const [isLoadingTokens, setIsLoadingTokens] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [fromToken, setFromToken] = useState<string>('');
   const [toToken, setToToken] = useState<string>('');
   const [fromAmount, setFromAmount] = useState<string>('');
   const [toAmount, setToAmount] = useState<string>('');
-  const [balance, setBalance] = useState<number>(1000);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Fetch tokens on mount
+  useEffect(() => {
+    const loadTokens = async () => {
+      try {
+        setIsLoadingTokens(true);
+        const data = await fetchTokenPrices();
+        const uniqueTokens = getUniqueTokens(data);
+        setTokens(uniqueTokens);
+        setFetchError(null);
+      } catch (err) {
+        setFetchError('Failed to load token prices. Please refresh the page.');
+        console.error('Error loading tokens:', err);
+      } finally {
+        setIsLoadingTokens(false);
+      }
+    };
+
+    loadTokens();
+  }, []);
 
   // Initialize default tokens
   useEffect(() => {
@@ -51,7 +68,9 @@ export function useSwapForm({ tokens, onSwap }: UseSwapFormProps) {
   };
 
   const handlePercentageClick = (percentage: number) => {
-    const amount = (balance * percentage / 100).toFixed(2);
+    const fromTokenData = tokens.find(t => t.currency === fromToken);
+    const fromTokenBalance = fromTokenData?.balance || 0;
+    const amount = (fromTokenBalance * percentage / 100).toFixed(2);
     setFromAmount(amount);
     setError(null);
   };
@@ -73,7 +92,9 @@ export function useSwapForm({ tokens, onSwap }: UseSwapFormProps) {
       return false;
     }
 
-    if (parseFloat(fromAmount) > balance) {
+    const fromTokenData = tokens.find(t => t.currency === fromToken);
+    const fromTokenBalance = fromTokenData?.balance || 0;
+    if (parseFloat(fromAmount) > fromTokenBalance) {
       setError('Insufficient balance');
       return false;
     }
@@ -92,6 +113,16 @@ export function useSwapForm({ tokens, onSwap }: UseSwapFormProps) {
     return true;
   };
 
+  const handleSwap = async (fromToken: string, toToken: string, fromAmount: number, toAmount: number) => {
+    // Simulate API call with delay
+    return new Promise<void>((resolve) => {
+      setTimeout(() => {
+        console.log(`Swapping ${fromAmount} ${fromToken} to ${toAmount} ${toToken}`);
+        resolve();
+      }, 1500);
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -104,11 +135,24 @@ export function useSwapForm({ tokens, onSwap }: UseSwapFormProps) {
     setSuccessMessage(null);
 
     try {
-      // Simulate API call with delay
-      await onSwap(fromToken, toToken, parseFloat(fromAmount));
+      const fromAmountNum = parseFloat(fromAmount);
+      const toAmountNum = parseFloat(toAmount);
       
-      // Update balance (mock)
-      setBalance(prev => prev - parseFloat(fromAmount));
+      // Simulate API call with delay
+      await handleSwap(fromToken, toToken, fromAmountNum, toAmountNum);
+      
+      // Update the tokens array with new balances directly
+      setTokens(prevTokens => 
+        prevTokens.map(token => {
+          if (token.currency === fromToken) {
+            return { ...token, balance: token.balance - fromAmountNum };
+          }
+          if (token.currency === toToken) {
+            return { ...token, balance: token.balance + toAmountNum };
+          }
+          return token;
+        })
+      );
       
       setSuccessMessage(`Successfully swapped ${fromAmount} ${fromToken} for ${toAmount} ${toToken}`);
       setFromAmount('');
@@ -126,14 +170,20 @@ export function useSwapForm({ tokens, onSwap }: UseSwapFormProps) {
   const fromTokenData = tokens.find(t => t.currency === fromToken);
   const toTokenData = tokens.find(t => t.currency === toToken);
   const exchangeRate = calculateExchangeRate(fromTokenData, toTokenData);
+  const fromTokenBalance = fromTokenData?.balance || 0;
+  const toTokenBalance = toTokenData?.balance || 0;
 
   return {
     // State
+    tokens,
+    isLoadingTokens,
+    fetchError,
     fromToken,
     toToken,
     fromAmount,
     toAmount,
-    balance,
+    fromTokenBalance,
+    toTokenBalance,
     isLoading,
     error,
     successMessage,
